@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+import logging
+import datetime
+
+from celery.bin.base import Command, Option
+from celery_watcher import SupervisorCelerydManager, watch, DEFAULT_SUPERVISOR_ADDRESS
+
+
+class WatcherCommand(Command):
+    doc = __doc__
+    supports_args = False
+
+    def run(self, loglevel=None, supervisor_address=None,
+                                 manageable_queues=None,
+                                 queue_lifespan=None,
+                                 **kwargs):
+        logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
+                            level=loglevel)
+        manager = SupervisorCelerydManager(
+                manageable_queues=manageable_queues,
+                queue_lifespan=datetime.timedelta(seconds=60*queue_lifespan),
+                supervisor_address=supervisor_address,
+        )
+        watch(manager, app=self.app)
+
+    def get_options(self):
+        return (
+            Option('-l', '--loglevel', default="INFO"),
+            Option('-s', '--supervisor-address', default=DEFAULT_SUPERVISOR_ADDRESS),
+            Option('-m', '--manageable-queues', default='*'),
+            Option('-L', '--queue-lifespan', type='int', default=10),
+        )
+
+
+def main():
+    cmd = WatcherCommand()
+    cmd.execute_from_commandline()
+
+
+if __name__ == '__main__':
+    main()
