@@ -21,20 +21,23 @@ class CelerydManager(object):
         queue = event.get('queue', '')
         logger.debug('Received event %r to queue %s', event, queue)
         if self.is_queue_manageable(queue):
-            logger.debug('Queue %s is manageable (matches %s)',
-                         queue, self.manageable_queues)
             if not self.is_queue_active(queue):
                 self.start_queue(queue)
-                logger.info('Queue %s started', queue)
+                logger.info('Queue %r started', queue)
             self.queue_invocations[queue] = datetime.datetime.now()
             logger.debug('Last invocation of queue %r is now', queue)
-        else:
-            logger.debug('Queue %s IS NOT manageable (DOES NOT match %s)',
-                         queue, self.manageable_queues)
         self.stop_outdated_queues()
 
+    def is_queue_matches(self, queue):
+        matches = fnmatch(queue, self.manageable_queues)
+        if matches:
+            logger.debug('Queue %r matches %r', queue, self.manageable_queues)
+        else:
+            logger.debug('Queue %r DOES NOT match %r', queue, self.manageable_queues)
+        return matches
+
     def is_queue_manageable(self, queue):
-        return fnmatch(queue, self.manageable_queues)
+        return self.is_queue_matches(queue)
 
     def is_queue_active(self, queue):
         raise NotImplementedError('Method must be implemented in subclass')
@@ -54,7 +57,7 @@ class CelerydManager(object):
                     last_invocation < datetime.datetime.now() - self.queue_lifespan:
                 if self.is_queue_active(queue):
                     self.stop_queue(queue)
-                    logger.info('Queue %s stopped', queue)
+                    logger.info('Queue %r stopped', queue)
 
 
 DEFAULT_SUPERVISOR_ADDRESS = 'http://127.0.0.1:9001'
@@ -94,6 +97,16 @@ class SupervisorCelerydManager(CelerydManager):
         self.queue_state_cache_timeout = datetime.timedelta(seconds=60)
         super(SupervisorCelerydManager, self).__init__(*args, **kwargs)
 
+    def is_queue_manageable(self, queue):
+        matches = self.is_queue_matches(queue)
+        if not matches:
+            return False
+        self.update_queue_state_cache()
+        manageable = queue in self.queue_state_cache
+        if not manageable:
+            logger.debug(('Queue %r is not known by the supervisor. '
+                           'Hopefully, it will be started by someone else.'), queue)
+        return manageable
 
     def is_queue_active(self, queue):
         self.update_queue_state_cache()
@@ -119,7 +132,7 @@ class SupervisorCelerydManager(CelerydManager):
                 process = process_info['name']
                 state = process_info['state'] in (10, 20, 30)
                 queue = self.process_to_queue(process)
-                if queue and self.is_queue_manageable(queue):
+                if queue and self.is_queue_matches(queue):
                     self.queue_state_cache[queue] = state
                     logger.debug('Queue %r is marked in cache as %r', queue, state)
             self.queue_state_cache_last_update = now
