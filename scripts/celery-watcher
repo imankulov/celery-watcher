@@ -13,13 +13,22 @@ class WatcherCommand(Command):
     def run(self, loglevel=None, supervisor_address=None,
                                  manageable_queues=None,
                                  queue_lifespan=None,
+                                 process_prefix=None,
                                  **kwargs):
         logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
                             level=loglevel)
+        def queue_to_process(queue):
+            return '{0}{1}'.format(process_prefix, queue)
+        def process_to_queue(process):
+            if not process.startswith(process_prefix):
+                return None
+            return process[len(process_prefix):]
         manager = SupervisorCelerydManager(
                 manageable_queues=manageable_queues,
                 queue_lifespan=datetime.timedelta(seconds=60*queue_lifespan),
                 supervisor_address=supervisor_address,
+                queue_to_process=queue_to_process,
+                process_to_queue=process_to_queue,
         )
         watch(manager, app=self.app)
 
@@ -29,6 +38,7 @@ class WatcherCommand(Command):
             Option('-s', '--supervisor-address', default=DEFAULT_SUPERVISOR_ADDRESS),
             Option('-m', '--manageable-queues', default='*'),
             Option('-L', '--queue-lifespan', type='int', default=10),
+            Option('--process-prefix', default=''),
         )
 
 

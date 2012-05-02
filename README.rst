@@ -6,8 +6,8 @@ manage several celery daemons in a quite specific environment:
 
 - All managed celery daemons are launched by `supervisor <http://supervisord.org/>`_
 - Every managed celery daemon serves exactly one queue
-- Queue name seved by celeryd daemon exactly matches the name of the celery
-  process in supervisor config (for the sake of simplicity)
+- Queue name in celery matches the name of the celery process in supervisor, or
+  is a suffix of that process name
 
 Providing these conditions are met, celery-watcher subscribes for events of type
 `task-sent <http://ask.github.com/celery/userguide/monitoring.html#task-events>`_,
